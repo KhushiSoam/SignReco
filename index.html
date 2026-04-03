@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sign Language Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #216130;  /* dark green background */
+            color: white;
+        }
+        h1 {
+            color: black;
+        }
+        img {
+            border: 2px solid #080808;
+            border-radius: 8px;
+        }
+        #prediction {
+            font-size: 24px;
+            color: #ffffff;
+            margin-top: 10px;
+            display: inline-block;
+        }
+        #speakBtn {
+            font-size: 18px;
+            margin-left: 10px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: 1px solid #fff;
+            background-color: #333;
+            color: #fff;
+        }
+        #speakBtn:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-Time Sign Language Detection</h1>
+    <img src="/video_feed" width="640" height="480">
+    <div>
+        <span id="prediction">Prediction will appear here</span>
+        <button id="speakBtn">🔊 Speak</button>
+    </div>
+
+    <div style="margin-top: 20px;">
+    <label for="language">Choose Language:</label>
+    <select id="language">
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="hi">Hindi</option>
+        <option value="ur">Urdu</option>
+        <option value="ar">Arabic</option>
+        <option value="zh-cn">Chinese</option>
+        <option value="ja">Japanese</option>
+        <option value="ko">Korean</option>
+        <option value="pt">Portuguese</option>
+    </select>
+
+    <button id="translateBtn">🌍 Translate</button>
+</div>
+
+<div style="margin-top: 15px;">
+    <span id="translatedText">Translated text will appear here</span>
+</div>
+
+    <script>
+        const predictionEl = document.getElementById("prediction");
+        const speakBtn = document.getElementById("speakBtn");
+
+        async function fetchPrediction() {
+            try {
+                let res = await fetch('/get_latest_prediction');
+                let data = await res.json();
+                predictionEl.innerText = data.prediction;
+            } catch(err) {
+                console.error(err);
+            }
+        }
+
+        // Poll every 500ms for smooth updates
+        setInterval(fetchPrediction, 500);
+
+        // Speaker button: speak the current prediction on click
+        speakBtn.addEventListener("click", () => {
+            const currentPrediction = predictionEl.innerText;
+            if (currentPrediction) {
+                let utterance = new SpeechSynthesisUtterance(currentPrediction);
+                speechSynthesis.speak(utterance);
+            }
+        });
+        // --- Translation Elements ---
+const translateBtn = document.getElementById("translateBtn");
+const translatedEl = document.getElementById("translatedText");
+const langSelect = document.getElementById("language");
+
+// --- Translate Button Logic ---
+translateBtn.addEventListener("click", async () => {
+    const selectedLang = langSelect.value;
+    const currentText = predictionEl.innerText;
+
+    try {
+        const response = await fetch("/translate", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                text: currentText,
+                lang: selectedLang
+            })
+        });
+
+        const data = await response.json();
+        translatedEl.innerText = data.translated_text;
+
+    } catch (error) {
+        translatedEl.innerText = "Translation Error";
+        console.error(error);
+    }
+});
+    </script>
+</body>
+</html>
+
+
+
+
+
+
