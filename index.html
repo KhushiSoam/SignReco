@@ -6,7 +6,7 @@
         body {
             font-family: Arial, sans-serif;
             text-align: center;
-            background-color: #216130;  /* dark green background */
+            background-color: #216130;  
             color: white;
         }
         h1 {
@@ -39,37 +39,65 @@
 </head>
 <body>
     <h1>Real-Time Sign Language Detection</h1>
+    <!-- Keeps your original video display streaming setup intact -->
     <img src="/video_feed" width="640" height="480">
+    
     <div>
         <span id="prediction">Prediction will appear here</span>
         <button id="speakBtn">🔊 Speak</button>
     </div>
 
     <div style="margin-top: 20px;">
-    <label for="language">Choose Language:</label>
-    <select id="language">
-        <option value="es">Spanish</option>
-        <option value="fr">French</option>
-        <option value="de">German</option>
-        <option value="hi">Hindi</option>
-        <option value="ur">Urdu</option>
-        <option value="ar">Arabic</option>
-        <option value="zh-cn">Chinese</option>
-        <option value="ja">Japanese</option>
-        <option value="ko">Korean</option>
-        <option value="pt">Portuguese</option>
-    </select>
+        <label for="language">Choose Language:</label>
+        <select id="language">
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="hi">Hindi</option>
+            <option value="ur">Urdu</option>
+            <option value="ar">Arabic</option>
+            <option value="zh-cn">Chinese</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="pt">Portuguese</option>
+        </select>
+        <button id="translateBtn">🌍 Translate</button>
+    </div>
 
-    <button id="translateBtn">🌍 Translate</button>
-</div>
+    <div style="margin-top: 15px;">
+        <span id="translatedText">Translated text will appear here</span>
+    </div>
 
-<div style="margin-top: 15px;">
-    <span id="translatedText">Translated text will appear here</span>
-</div>
+    <!-- Background tools to capture client-side webcam without blocking the view -->
+    <video id="webcam" width="640" height="480" autoplay playsinline style="display:none;"></video>
+    <canvas id="stage" width="640" height="480" style="display:none;"></canvas>
 
     <script>
         const predictionEl = document.getElementById("prediction");
         const speakBtn = document.getElementById("speakBtn");
+        const video = document.getElementById("webcam");
+        const canvas = document.getElementById("stage");
+        const ctx = canvas.getContext("2d");
+
+        // Request browser camera stream
+        navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+            .then(stream => {
+                video.srcObject = stream;
+                // Continuously send frames to the backend every 100ms
+                setInterval(uploadFrame, 100);
+            })
+            .catch(err => console.error("Camera error:", err));
+
+        function uploadFrame() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(blob => {
+                    const fd = new FormData();
+                    fd.append("image", blob, "frame.jpg");
+                    fetch("/upload_frame", { method: "POST", body: fd });
+                }, "image/jpeg", 0.6);
+            }
+        }
 
         async function fetchPrediction() {
             try {
@@ -80,11 +108,8 @@
                 console.error(err);
             }
         }
-
-        // Poll every 500ms for smooth updates
         setInterval(fetchPrediction, 500);
 
-        // Speaker button: speak the current prediction on click
         speakBtn.addEventListener("click", () => {
             const currentPrediction = predictionEl.innerText;
             if (currentPrediction) {
@@ -92,36 +117,27 @@
                 speechSynthesis.speak(utterance);
             }
         });
-        // --- Translation Elements ---
-const translateBtn = document.getElementById("translateBtn");
-const translatedEl = document.getElementById("translatedText");
-const langSelect = document.getElementById("language");
 
-// --- Translate Button Logic ---
-translateBtn.addEventListener("click", async () => {
-    const selectedLang = langSelect.value;
-    const currentText = predictionEl.innerText;
+        const translateBtn = document.getElementById("translateBtn");
+        const translatedEl = document.getElementById("translatedText");
+        const langSelect = document.getElementById("language");
 
-    try {
-        const response = await fetch("/translate", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                text: currentText,
-                lang: selectedLang
-            })
+        translateBtn.addEventListener("click", async () => {
+            const selectedLang = langSelect.value;
+            const currentText = predictionEl.innerText;
+            try {
+                const response = await fetch("/translate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text: currentText, lang: selectedLang })
+                });
+                const data = await response.json();
+                translatedEl.innerText = data.translated_text;
+            } catch (error) {
+                translatedEl.innerText = "Translation Error";
+                console.error(error);
+            }
         });
-
-        const data = await response.json();
-        translatedEl.innerText = data.translated_text;
-
-    } catch (error) {
-        translatedEl.innerText = "Translation Error";
-        console.error(error);
-    }
-});
     </script>
 </body>
 </html>
