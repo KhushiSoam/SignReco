@@ -1,12 +1,13 @@
-from flask import Flask, Response, send_file, jsonify, request
+import os
 import cv2
 import numpy as np
 import keras
+from flask import Flask, Response, send_file, jsonify, request
 from cvzone.HandTrackingModule import HandDetector
 from googletrans import Translator
-translator = Translator()
 
-app = Flask(__name__, template_folder='.')  # index.html is in the same folder
+translator = Translator()
+app = Flask(__name__, template_folder='.')  
 
 # ---- Load model ----
 model_path = "ModelV3"
@@ -15,21 +16,41 @@ labels = ["Thankyou", "Hello", "I love you"]
 
 detector = HandDetector(maxHands=2)
 img_size = 224
+latest_prediction = ""  
 
-# ---- Video capture ----
-cap = cv2.VideoCapture(0)
-latest_prediction = ""  # Store last prediction for TTS
+# Global variable to hold the latest frame bytes sent from the browser
+latest_frame = None
 
+@app.route('/')
+def index():
+    return send_file("index.html")
+
+# This endpoint receives the raw frames from the user's browser camera
+@app.route('/upload_frame', methods=['POST'])
+def upload_frame():
+    global latest_frame
+    file = request.files.get('image')
+    if file:
+        latest_frame = file.read()
+    return jsonify({"success": True})
+
+# This feeds the processed video back to the page just like your original code did
 def generate_frames():
-    global latest_prediction
+    global latest_prediction, latest_frame
     while True:
-        success, frame = cap.read()
-        if not success:
-            break
+        if latest_frame is None:
+            continue
+            
+        # Convert incoming bytes to OpenCV frame
+        file_bytes = np.frombuffer(latest_frame, np.uint8)
+        frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        if frame is None:
+            continue
 
+        # YOUR ORIGINAL WORKING AI LOGIC HERE
         hands, img_out = detector.findHands(frame, draw=True)
         if hands:
-            hand = hands[0]
+            hand = hands[0] # Properly access the first hand object
             x, y, w, h = hand["bbox"]
             offset = 20
             y1, y2 = max(0, y-offset), min(frame.shape[0], y+h+offset)
@@ -54,16 +75,10 @@ def generate_frames():
                     cv2.putText(img_out, "Prediction Error", (50,50),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
 
-        # Encode frame to JPEG
         ret, buffer = cv2.imencode('.jpg', img_out)
         frame_bytes = buffer.tobytes()
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
-# ---- Routes ----
-@app.route('/')
-def index():
-    return send_file("index.html")  # index.html in same folder
 
 @app.route('/video_feed')
 def video_feed():
@@ -79,16 +94,13 @@ def translate():
     data = request.json
     text = data.get("text")
     target_lang = data.get("lang")
-
     if not text:
         return jsonify({"translated_text": ""})
-
     translated = translator.translate(text, dest=target_lang)
-
     return jsonify({"translated_text": translated.text})
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=7860, debug=True)
 
 
 
